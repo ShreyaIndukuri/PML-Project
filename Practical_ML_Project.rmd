@@ -1,0 +1,105 @@
+---
+title: "Practical-ML-Prjoect"
+author: "Shreya Indukuri"
+date: "20/04/2020"
+output: html_document
+---
+
+```{r setup, cache=TRUE, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Executive Summary
+The project aims to harness a prediction model from the training set that is sufficient to predict the correct classe of the test set.
+
+
+## Data Preprocessing
+
+Loading the required packages:
+
+```{r}
+library(caret)
+library(rpart)
+library(knitr)
+library(randomForest)
+set.seed(123)
+```
+
+Setting up the working directory,downloading the required files and loading them into Rstudio.
+
+```{r}
+setwd("C:/Users/induk/Downloads")
+trainingurl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testingurl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(trainingurl,destfile="pml-training.csv")
+download.file(testingurl,destfile="pml-testing.csv")
+pml.training <- read.csv("pml-training.csv",header = T,row.names = 1)
+pml.testing <- read.csv("pml-testing.csv",header = T,row.names = 1) 
+```
+
+Exploring the dataset a little to understand the type of data we are given:
+```{r}
+#output not displayed due to too many rows
+str(pml.training)
+```
+
+## Data Cleaning,Transformation and Feature Selection
+
+
+Data is transformed and cleaned to extract only the meaningful data to be used.
+Noticing that some of the variables have a large number of NA values, a quick and dirty way to clean the data without imputing is to remove the columns with NA.
+
+```{r}
+#The first 6 rows are removed as they are irrelevant and increases the standard error
+training<- pml.training[,-c(1:6)]
+testing<-pml.testing[,-c(1:6)]
+# Variables with near zero covariance are removed
+zerovariance <- nearZeroVar(training,saveMetrics=TRUE)
+training <- training[,!zerovariance $nzv]
+testing <- testing[,!zerovariance $nzv]
+# Variables with missing values are removed
+training<- training[,!(colSums(is.na(training)) > 0)]
+testing<- testing[,!(colSums(is.na(testing)) > 0)]
+```
+
+## Creating the data partition
+
+In the training set, we partition the data into training and validation set.
+```{r}
+fortraining <- createDataPartition(training$classe, p=0.8, list=FALSE)
+training <- training[fortraining,]
+validation <-training[-fortraining,] 
+```
+
+
+## Random Forest Model
+
+With the data ready to go, the random forest model is fitted.
+```{r}
+rf<-randomForest(classe~.,data=training)
+rf
+```
+
+The out-of-bag estimate of error is 0.4% meaning that our model performed really really well.The performance of the model is further tested using the validation set.
+```{r}
+predictrf<-predict(rf,newdata=validation)
+confusionMatrix(predictrf,validation$classe)
+```
+
+Welp! With an accuracy of 100% and an out-of-sample rate of precisely 0% , this is truly the most robust tool for predicting the upcoming test$classe values, at least for this particular run. With a test set less than 150 times the number of observations of the validation set, anything less than a perfect score on the test set would be a surprise at this point.
+
+
+## Prediction
+The final results of the prediction is output into seperate .txt files.
+```{r}
+testpredict_rf <- predict(rf, newdata=testing)
+results <- function(x) {
+        n <- length(x)
+        for (i in 1:n) {
+                filename <- paste0("problem_id_",i, ".txt")
+                write.table(x[i], file=filename, quote=F, row.names=F,col.names=F)
+        }
+}
+results(testpredict_rf)
+```
